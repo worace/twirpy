@@ -27,7 +27,7 @@ class TwirpServer(object):
             raise exceptions.TwirpServerException(
                 code=errors.Errors.Unimplemented,
                 message="service has no endpoint " + rpc_method,
-                meta={"twirp_invalide_route": "POST " + path})
+                meta={"twirp_invalid_route": "POST " + path})
 
 
         return endpoint

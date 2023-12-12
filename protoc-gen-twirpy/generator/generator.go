@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"log"
+	"os"
 	"path"
 	"strings"
 
@@ -24,7 +26,7 @@ func Generate(r *plugin.CodeGeneratorRequest) *plugin.CodeGeneratorResponse {
 			return resp
 		}
 
-		twirpFile, err := GenerateTwirpFile(fd)
+		twirpFile, err := GenerateTwirpFile(fd, fileName)
 		if err != nil {
 			resp.Error = proto.String("File[" + fileName + "][generate]: " + err.Error())
 			return resp
@@ -34,12 +36,22 @@ func Generate(r *plugin.CodeGeneratorRequest) *plugin.CodeGeneratorResponse {
 	return resp
 }
 
-func GenerateTwirpFile(fd *descriptor.FileDescriptorProto) (*plugin.CodeGeneratorResponse_File, error) {
+func GenerateTwirpFile(fd *descriptor.FileDescriptorProto, sourceFileName string) (*plugin.CodeGeneratorResponse_File, error) {
 
 	name := fd.GetName()
+	l := log.New(os.Stderr, "", 0)
+	l.Println("Generating twirp file for", name)
+	l.Println("fd: ", fd)
+	l.Println("fd package: ", fd.GetPackage())
+	l.Println("src filename: ", sourceFileName)
+	// Content for schemas are put in a separate file with the same name as the proto file
+	// but with _pb2.py suffix, e.g. haberdasher.proto -> haberdasher_pb2.py
+	schema_src_name := strings.TrimSuffix(name, path.Ext(name)) + "_pb2.py"
 
+	l.Println("schema filename: ", schema_src_name)
 	vars := TwirpTemplateVariables{
-		FileName: name,
+		FileName:       name,
+		SchemaFileName: schema_src_name,
 	}
 
 	svcs := fd.GetService()
@@ -51,12 +63,21 @@ func GenerateTwirpFile(fd *descriptor.FileDescriptorProto) (*plugin.CodeGenerato
 		}
 
 		for _, method := range svc.GetMethod() {
+			method.GetInputType()
+
+			l.Println("adding method input: ", method.GetInputType())
+			inputMessageName := strings.Split(method.GetInputType(), ".")
+			lastInputMessageNameElement := inputMessageName[len(inputMessageName)-1]
+			nextToLastInputMessageNameElement := inputMessageName[len(inputMessageName)-2]
+
 			twirpMethod := &TwirpMethod{
-				ServiceURL:  svcURL,
-				ServiceName: twirpSvc.Name,
-				Name:        method.GetName(),
-				Input:       getSymbol(method.GetInputType()),
-				Output:      getSymbol(method.GetOutputType()),
+				ServiceURL:             svcURL,
+				ServiceName:            twirpSvc.Name,
+				Name:                   method.GetName(),
+				Input:                  getSymbol(method.GetInputType()),
+				InputMessageName:       lastInputMessageNameElement,
+				InputMessageModuleName: nextToLastInputMessageNameElement,
+				Output:                 getSymbol(method.GetOutputType()),
 			}
 
 			twirpSvc.Methods = append(twirpSvc.Methods, twirpMethod)
