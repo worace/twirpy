@@ -42,6 +42,7 @@ func GenerateTwirpFile(fd *descriptor.FileDescriptorProto, sourceFileName string
 	l := log.New(os.Stderr, "", 0)
 	l.Println("Generating twirp file for", name)
 	l.Println("fd: ", fd)
+	// package: haberdasher
 	l.Println("fd package: ", fd.GetPackage())
 	l.Println("src filename: ", sourceFileName)
 	// Content for schemas are put in a separate file with the same name as the proto file
@@ -56,6 +57,9 @@ func GenerateTwirpFile(fd *descriptor.FileDescriptorProto, sourceFileName string
 
 	svcs := fd.GetService()
 	for _, svc := range svcs {
+		// package: haberdasher
+		// service name: Haberdasher
+		l.Println("adding service: ", svc.GetName())
 		svcURL := fmt.Sprintf("%s.%s", fd.GetPackage(), svc.GetName())
 		twirpSvc := &TwirpService{
 			Name:       svc.GetName(),
@@ -66,18 +70,23 @@ func GenerateTwirpFile(fd *descriptor.FileDescriptorProto, sourceFileName string
 			method.GetInputType()
 
 			l.Println("adding method input: ", method.GetInputType())
-			inputMessageName := strings.Split(method.GetInputType(), ".")
-			lastInputMessageNameElement := inputMessageName[len(inputMessageName)-1]
-			nextToLastInputMessageNameElement := inputMessageName[len(inputMessageName)-2]
+			inputMessageNameComponents := strings.Split(method.GetInputType(), ".")
+			lastInputMessageNameElement := inputMessageNameComponents[len(inputMessageNameComponents)-1]
+			nextToLastInputMessageNameElement := inputMessageNameComponents[len(inputMessageNameComponents)-2]
+			outputMessageNameComponents := strings.Split(method.GetOutputType(), ".")
+			outputMessageName := outputMessageNameComponents[len(outputMessageNameComponents)-1]
+			outputModuleName := outputMessageNameComponents[len(outputMessageNameComponents)-2]
 
 			twirpMethod := &TwirpMethod{
-				ServiceURL:             svcURL,
-				ServiceName:            twirpSvc.Name,
-				Name:                   method.GetName(),
-				Input:                  getSymbol(method.GetInputType()),
-				InputMessageName:       lastInputMessageNameElement,
-				InputMessageModuleName: nextToLastInputMessageNameElement,
-				Output:                 getSymbol(method.GetOutputType()),
+				ServiceURL:              svcURL,
+				ServiceName:             twirpSvc.Name,
+				Name:                    method.GetName(),
+				Input:                   getSymbol(method.GetInputType()),
+				InputMessageName:        lastInputMessageNameElement,
+				InputMessageModuleName:  nextToLastInputMessageNameElement,
+				OutputMessageName:       outputMessageName,
+				OutputMessageModuleName: outputModuleName,
+				Output:                  getSymbol(method.GetOutputType()),
 			}
 
 			twirpSvc.Methods = append(twirpSvc.Methods, twirpMethod)

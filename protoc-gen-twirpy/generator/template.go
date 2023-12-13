@@ -16,14 +16,16 @@ type TwirpService struct {
 }
 
 type TwirpMethod struct {
-	ServiceURL             string
-	ServiceName            string
-	Name                   string
-	Comment                string
-	Input                  string
-	InputMessageName       string
-	InputMessageModuleName string
-	Output                 string
+	ServiceURL              string
+	ServiceName             string
+	Name                    string
+	Comment                 string
+	Input                   string
+	InputMessageName        string
+	InputMessageModuleName  string
+	OutputMessageName       string
+	OutputMessageModuleName string
+	Output                  string
 }
 
 type TwirpImport struct {
@@ -45,12 +47,62 @@ from twirp.server import TwirpServer
 from twirp.client import TwirpClient
 from twirp.context import Context
 from abc import ABC, abstractmethod
+from typing import Dict, TypeVar
 
 {{- range .Services}}
 {{- range .Methods}}
 from {{.InputMessageModuleName}}_pb2 import {{.InputMessageName}}
+from {{.OutputMessageModuleName}}_pb2 import {{.OutputMessageName}}
 {{- end}}
 {{- end}}
+
+
+# "Local Procedure Call" "service registry"
+# This should really go into the 'runtime' provided by the Python lib, but 
+# I don't have a very convenient way to publish a forked version of that library at the moment
+# So it's easier to just put it in the code-generation here, even though there's not really
+# anything dynamic about the code we are generating'
+
+T = TypeVar("T")
+
+
+class ServiceRegistry(object):
+    _registry: Dict[str, object] = {}
+
+    def register(self, service_instance):
+		# Twirp services are ABC instances with a 'name' property corresponding to the
+		# protobuf (generated) service name
+        name = service_instance.service_id
+        if name in self._registry:
+            raise ValueError(
+                f"Handler for {name} already registered. Current impl: {self._registry[name]}"
+            )
+        else:
+            self._registry[name] = service_instance
+
+    def get_instance(self, service_class: T) -> T:
+        name = service_class.service_id
+        if name in self._registry:
+            return self._registry[name]
+        else:
+            avail = self._registry.keys()
+            raise ValueError(
+                f"No handler for service {name} registered. Available services are: {avail}"
+            )
+
+
+Request = TypeVar("Request")
+Response = TypeVar("Response")
+
+class LocalTwirpClient:
+	def __init__(self, service_registry: ServiceRegistry):
+		self._service_registry = service_registry
+
+	def _make_request(self, url: str, request: Request) -> Response:
+		service_id, method_name = url.split("/")
+		service = self._service_registry.get_instance(service_id)
+		method = getattr(service, method_name)
+		return method(ctx=Context(), request=request)
 
 
 _sym_db = _symbol_database.Default()
@@ -58,10 +110,11 @@ _sym_db = _symbol_database.Default()
 {{range .Services}}
 
 class {{.Name}}Service(ABC):
-	name: str = "{{.Name}}"
+	# package.ServiceName e.g. haberdasher.Haberdasher
+	service_id: str = "{{.ServiceURL}}"
 	{{range .Methods}}
 	@abstractmethod
-	def {{.Name}}(self, ctx: Context, arg: {{.Input}}) -> {{.Output}}:
+	def {{.Name}}(self, ctx: Context, arg: {{.InputMessageName}}) -> {{.OutputMessageName}}:
 		raise NotImplementedError()
 	{{end}}
 
@@ -83,7 +136,7 @@ class {{.Name}}Server(TwirpServer):
 
 class {{.Name}}Client(TwirpClient):
 {{range .Methods}}
-	def {{.Name}}(self, *args, ctx, request, server_path_prefix="/twirp", **kwargs):
+	def {{.Name}}(self, *args, ctx: Context, request: {{.InputMessageName}}, server_path_prefix="/twirp", **kwargs) -> {{.OutputMessageName}}:
 		return self._make_request(
 			url=F"{server_path_prefix}/{{.ServiceURL}}/{{.Name}}",
 			ctx=ctx,
@@ -91,4 +144,18 @@ class {{.Name}}Client(TwirpClient):
 			response_obj=_sym_db.GetSymbol("{{.Output}}"),
 			**kwargs,
 		)
-{{end}}{{end}}`))
+{{end}}
+
+
+class Local{{.Name}}Client(LocalTwirpClient):
+{{range .Methods}}
+	def {{.Name}}(self, request: {{.InputMessageName}}) -> {{.OutputMessageName}}:
+		return self._make_request(
+			# will be like haberdasher.Haberdasher/MakeHat
+			url=F"{{.ServiceURL}}/{{.Name}}",
+			request=request,
+		)
+{{end}} # end Range .Methods
+{{end}} # end Range .Services
+
+`))
