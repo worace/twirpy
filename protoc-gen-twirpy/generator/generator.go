@@ -41,8 +41,11 @@ func GenerateTwirpFile(fd *descriptor.FileDescriptorProto, sourceFileName string
 	name := fd.GetName()
 	l := log.New(os.Stderr, "", 0)
 	l.Println("Generating twirp file for", name)
-	l.Println("fd: ", fd)
 	// package: haberdasher
+	// fd.name: services/haberdasher.proto
+	// sourceFileName: services/haberdasher.proto
+	// destination file name: haberdasher_twirp.py
+
 	l.Println("fd package: ", fd.GetPackage())
 	l.Println("src filename: ", sourceFileName)
 	// Content for schemas are put in a separate file with the same name as the proto file
