@@ -63,6 +63,18 @@ _sym_db = _symbol_database.Default()
 {{range .Services}}
 
 class {{.Name}}Service(ABC):
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		self.endpoints = { {{- range .Methods }}
+			"{{.Name}}": Endpoint(
+				service_name="{{.ServiceName}}",
+				name="{{.Name}}",
+				function=getattr(self, "{{.Name}}"),
+				input=_sym_db.GetSymbol("{{.Input}}"),
+				output=_sym_db.GetSymbol("{{.Output}}"),
+			),{{- end }}
+		}
+
 	# package.ServiceName e.g. haberdasher.Haberdasher
 	service_id: str = "{{.ServiceURL}}"
 	{{range .Methods}}
@@ -102,7 +114,7 @@ class {{.Name}}Client(TwirpClient):
 
 # This should be moved to the core twirp runtime lib but for now i'm inlining it in the app code
 # since i don't have a good way to publish a fork of the lib
-from libs.lpc_example.twirp_runtime import LocalTwirpClient
+from libs.proto_utils.twirp_runtime import LocalTwirpClient
 
 class Local{{.Name}}Client(LocalTwirpClient):
 {{range .Methods}}
