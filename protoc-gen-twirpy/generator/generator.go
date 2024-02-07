@@ -9,8 +9,8 @@ import (
 	"path"
 	"strings"
 
-	"github.com/golang/protobuf/protoc-gen-go/descriptor"
-	plugin "github.com/golang/protobuf/protoc-gen-go/plugin"
+  descriptor "google.golang.org/protobuf/types/descriptorpb"
+  plugin "google.golang.org/protobuf/types/pluginpb"
 	"google.golang.org/protobuf/proto"
 )
 
